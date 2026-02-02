@@ -3,6 +3,7 @@ pyproject.toml
 src/nogse_table_tools/__init__.py
 src/nogse_table_tools/features.py
 src/nogse_table_tools/io.py
+src/nogse_table_tools/match_params.py
 src/nogse_table_tools/metadata.py
 src/nogse_table_tools/params.py
 src/nogse_table_tools/reshape.py
