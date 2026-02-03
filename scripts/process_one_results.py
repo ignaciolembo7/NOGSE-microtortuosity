@@ -42,14 +42,16 @@ def main():
     df_long["meta_d_ms"] = meta.d_ms
     df_long["meta_encoding"] = meta.encoding
 
-    # Compute features (igual lógica que notebook)
+    gth = row.get("gthorsten_mTm", None)
+    gth = None if (gth is None or (isinstance(gth, float) and np.isnan(gth))) else float(gth)
+
     df_long = add_ogse_features(
         df_long,
         gamma=args.gamma,
         N=int(row["N"]),
         delta_ms=float(row["delta_ms"]),
         delta_app_ms=float(row["delta_app_ms"]),
-        gthorsten_val=float(row["gthorsten_mTm"]) if "gthorsten_mTm" in row and row["gthorsten_mTm"] == row["gthorsten_mTm"] else None,
+        gthorsten_val=gth,
     )
 
     args.out_dir.mkdir(parents=True, exist_ok=True)
