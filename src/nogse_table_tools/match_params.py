@@ -52,8 +52,20 @@ def select_params_row(params: pd.DataFrame, meta: ResultMeta) -> pd.Series:
     """
     df = params.copy()
 
+    def _norm_sheet(x: str) -> str:
+        # normalización mínima pero efectiva
+        return (
+            str(x)
+            .strip()
+            .replace("-", "")
+            .replace("_", "_")  # (no cambia, pero deja claro que se conserva)
+            .upper()
+        )
+
     if meta.sheet and "sheet" in df.columns:
-        df = df[df["sheet"].astype(str) == str(meta.sheet)]
+        target = _norm_sheet(meta.sheet)
+        df = df[df["sheet"].map(_norm_sheet) == target]
+
 
     if meta.seq is not None and "seq" in df.columns:
         cand = df[df["seq"].fillna(-1).astype(int) == int(meta.seq)]
@@ -67,12 +79,24 @@ def select_params_row(params: pd.DataFrame, meta: ResultMeta) -> pd.Series:
     # Para PGSE: vos decidiste convención Hz=0
     Hz = 0 if (meta.Hz is None and meta.encoding == "PGSE") else meta.Hz
 
+    # Hz: si buscamos 0, aceptamos también NaN (muchas tablas dejan vacío)
     if Hz is not None and "Hz" in df.columns:
-        df = df[df["Hz"].fillna(-999).astype(float) == float(Hz)]
+        hzcol = pd.to_numeric(df["Hz"], errors="coerce")
+        if float(Hz) == 0.0:
+            df = df[hzcol.isna() | (hzcol == 0.0)]
+        else:
+            df = df[hzcol == float(Hz)]
+
+    # bmax: tolerancia (por si hay 1995 vs 2000, etc.)
     if meta.bmax is not None and "bmax" in df.columns:
-        df = df[df["bmax"].fillna(-999).astype(float) == float(meta.bmax)]
+        bcol = pd.to_numeric(df["bmax"], errors="coerce")
+        df = df[(bcol - float(meta.bmax)).abs() <= 10]   # tolerancia 10 s/mm^2
+
+    # d_ms: tolerancia (por si hay 54.7 vs 55)
     if meta.d_ms is not None and "d_ms" in df.columns:
-        df = df[df["d_ms"].fillna(-999).astype(float) == float(meta.d_ms)]
+        dcol = pd.to_numeric(df["d_ms"], errors="coerce")
+        df = df[(dcol - float(meta.d_ms)).abs() <= 0.6]  # tolerancia 0.6 ms
+
 
     if len(df) != 1:
         raise ValueError(
