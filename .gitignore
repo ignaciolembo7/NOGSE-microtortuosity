@@ -1,0 +1,67 @@
+# =========================
+# OS / Editor
+# =========================
+.DS_Store
+Thumbs.db
+
+# VSCode
+.vscode/
+
+# =========================
+# Python cache / build
+# =========================
+__pycache__/
+*.py[cod]
+*.pyd
+*.so
+
+# Virtual envs (aunque ahora no uses, mejor ignorarlos)
+.venv/
+venv/
+env/
+
+# Packaging artifacts
+*.egg-info/
+dist/
+build/
+
+# Testing / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.coverage.*
+
+# =========================
+# Notebooks
+# =========================
+.ipynb_checkpoints/
+
+# =========================
+# Office / Excel temporales
+# =========================
+~$*.xls*
+~$*.xlsx
+
+# =========================
+# Data / outputs (NO versionar resultados)
+# =========================
+# Outputs del pipeline
+OGSE_signal/
+plots/
+
+# Archivos intermedios típicos
+*.parquet
+*.csv
+
+# (opcional) si generás JSONs de metadata
+*.json
+
+# =========================
+# Logs
+# =========================
+*.log
+
+# =========================
+# Results
+# =========================
+# Results/
