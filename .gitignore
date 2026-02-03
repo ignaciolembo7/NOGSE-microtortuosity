@@ -48,6 +48,7 @@ htmlcov/
 # Outputs del pipeline
 OGSE_signal/
 plots/
+analysis/
 
 # Archivos intermedios típicos
 *.parquet
@@ -61,10 +62,6 @@ plots/
 # =========================
 *.log
 
-# =========================
-# Plots
-# =========================
-plots/
 
 # =========================
 # Results
