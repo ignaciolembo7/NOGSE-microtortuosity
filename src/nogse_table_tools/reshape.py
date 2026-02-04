@@ -19,7 +19,7 @@ def to_long(
     ndirs: int,
     nbvals: int,
     bcol: str = "bvalues",
-    b0_reps: int | None = None,
+    b0_reps: int = 2,
     source_file: str | None = None,
 ) -> pd.DataFrame:
     """
@@ -34,8 +34,6 @@ def to_long(
         raise ValueError(f"No encuentro la columna '{bcol}'. Columnas: {list(any_df.columns)}")
 
     rois = [c for c in any_df.columns if c != bcol]
-    if b0_reps is None:
-        b0_reps = _count_leading_zeros(any_df[bcol])
 
     rows_expected = ndirs * nbvals
     long_parts: list[pd.DataFrame] = []

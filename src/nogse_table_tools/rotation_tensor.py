@@ -146,17 +146,34 @@ def rotate_signals_tensor(
 
             D = fit_tensor_from_signals(b=b, s_norm=s_norm, n_dirs=n_dirs, solver=solver)
 
-            # autovects para long/trans
+            # eigen-decomp
             e_vals, e_vecs = np.linalg.eigh(D)
-            idx = np.argsort(e_vals)[::-1]
-            v_long = e_vecs[:, idx[0]]
-            v_t1   = e_vecs[:, idx[1]]
-            v_t2   = e_vecs[:, idx[2]]
+            idx = np.argsort(e_vals)[::-1]  # λ1 >= λ2 >= λ3
+            v1 = e_vecs[:, idx[0]]
+            v2 = e_vecs[:, idx[1]]
+            v3 = e_vecs[:, idx[2]]
 
-            axes_full = dict(axes)
-            axes_full["longitudinal"]  = v_long
-            axes_full["transversal_1"] = v_t1
-            axes_full["transversal_2"] = v_t2
+            # ejes canónicos
+            axes_full = {
+                "x": np.array([1.0, 0.0, 0.0]),
+                "y": np.array([0.0, 1.0, 0.0]),
+                "z": np.array([0.0, 0.0, 1.0]),
+                # eigen-directions (autovalores)
+                "eig1": v1,
+                "eig2": v2,
+                "eig3": v3,
+                # definiciones tuyas
+                "long": np.array([1.0, 0.0, 0.0]),                 # long = x
+                "tra":  np.array([0.0, 1.0, 1.0]) / np.sqrt(2.0),  # tra = (y+z)/2 normalizado
+            }
+
+            extra_cols = [c for c in ["g", "g_max", "gthorsten", "gthorsten_mTm"] if c in d_bs.columns]
+            extras = {}
+            for c in extra_cols:
+                vals = pd.to_numeric(d_bs[c], errors="coerce")
+                if vals.notna().any():
+                    extras[c] = float(vals.median())
+
 
             # guardar D_proj y señal reconstruida en cada axis
             for axis_name, axis_vec in axes_full.items():
@@ -181,16 +198,17 @@ def rotate_signals_tensor(
                     "D_proj": Dp,
                 })
 
-        # también incluimos el punto b0 en la salida rotada (útil para plots)
-        out_rows.append({
+        row_dict = {
             "roi": roi,
-            "axis": "b0",
-            "b_step": 0,
-            "bvalue": float(d_b0[b_col].dropna().unique()[0]) if d_b0[b_col].notna().any() else 0.0,
-            "signal": S0,
-            "signal_norm": 1.0,
+            "axis": axis_name,
+            "b_step": int(b_step),
+            "bvalue": b,
+            "signal": S,
+            "signal_norm": S / S0,
             "S0": S0,
-        })
+        }
+        row_dict.update(extras)
+        out_rows.append(row_dict)
 
     df_rot = pd.DataFrame(out_rows).sort_values(["roi", "axis", "b_step"], kind="stable")
     df_dproj = pd.DataFrame(dproj_rows).sort_values(["roi", "axis", "b_step"], kind="stable")
