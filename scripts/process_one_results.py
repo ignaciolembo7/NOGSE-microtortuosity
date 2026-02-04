@@ -1,6 +1,7 @@
 from __future__ import annotations
 from pathlib import Path
 import argparse
+import numpy as np
 
 from nogse_table_tools.io import read_result_xls
 from nogse_table_tools.reshape import to_long
