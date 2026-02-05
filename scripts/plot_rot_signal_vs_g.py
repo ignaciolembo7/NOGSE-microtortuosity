@@ -23,7 +23,6 @@ def main():
     ap.add_argument("--xcol", default="g_lin_max", help="Ej: g_lin_max | g | gthorsten")
     ap.add_argument("--ycol", default="signal_norm", help="Ej: signal_norm | signal")
     ap.add_argument("--axes", nargs="+", default=["x", "y", "z", "eig1", "eig2", "eig3", "long", "tra"])
-    ap.add_argument("--out", default="analysis/plots", help="Carpeta output")
     args = ap.parse_args()
 
     df = load_many(args.glob)

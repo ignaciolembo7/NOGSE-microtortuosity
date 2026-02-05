@@ -5,9 +5,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
-
 PALETTE = ['#377eb8', '#984ea3', '#e41a1c', '#ff7f00', '#a65628', '#999999']
-
 
 def main():
     ap = argparse.ArgumentParser()

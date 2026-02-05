@@ -46,13 +46,12 @@ htmlcov/
 # Data / outputs (NO versionar resultados)
 # =========================
 # Outputs del pipeline
-OGSE_signal/
-plots/
-analysis/
+# OGSE_signal/
+# plots/
 
 # Archivos intermedios típicos
 *.parquet
-*.csv
+# *.csv
 
 # (opcional) si generás JSONs de metadata
 *.json
