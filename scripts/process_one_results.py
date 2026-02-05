@@ -14,7 +14,7 @@ def main():
     ap.add_argument("results_xls", type=Path)
     ap.add_argument("params_xlsx", type=Path)
     ap.add_argument("--out_dir", type=Path, default=Path("OGSE_signal/data"))
-    ap.add_argument("--gamma", type=float, default=267.522)  # 1/(ms*mT)
+    ap.add_argument("--gamma", type=float, default=267.5221900)  # 1/(ms*mT)
     args = ap.parse_args()
 
     meta = parse_results_filename(args.results_xls)

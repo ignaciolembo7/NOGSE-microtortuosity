@@ -21,9 +21,9 @@ def add_ogse_features(
     g[b == 0] = 0.0
     out["g"] = g
 
-    # g_max por dirección (máximo g real en esa dirección)
-    gmax_by_dir = out.loc[out["b_step"] > 0].groupby("direction")["g"].max()
-    out["g_max"] = out["direction"].map(gmax_by_dir)
+    # g_max por b_step: máximo g entre direcciones en ese b_step
+    gmax_by_step = out.loc[out["b_step"] > 0].groupby("b_step")["g"].max()
+    out["g_max"] = out["b_step"].map(gmax_by_step).fillna(0.0)
 
     # columna equiespaciada 0..g_max con nbvals+1 puntos (como linspace)
     # b_step va 0..nbvals
