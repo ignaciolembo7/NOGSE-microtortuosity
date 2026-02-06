@@ -1,6 +1,7 @@
 - Corregir que el calculo del bvalue a partir del g está repetido varias veces. Usar siempre la funcion bvalue. Por ahora vamos a usar siempre gthorsten
 - glinmax1 en las columnas de las tablas de contraste está mal calculado; A gthortsten_1 le falta multiplicar por dos y raiz; hay que agregar el 0 con contraste 0
 - Achicar los nombres porque no se puede comitear
+- borrar todas las columnas innecesarias
 
 py -m pip install -e .
 py scripts/process_one_results.py "D:\GitHub\Results\EXP\NOMBRE_results.xls" "D:\GitHub\Results\sequence_parameters.xlsx"
@@ -8,4 +9,4 @@ py scripts/rotate_ogse_tensor.py "OGSE_signal\data\NOMBRE_results.long.parquet" 
 py scripts/plot_rot_signal_vs_g.py --glob "OGSE_signal/rotated/*EXP*.rot_tensor.long.parquet" --roi PostCC --xcol g_lin_max --out_root plots
 py scripts/plot_dproj_vs_bvalue.py --glob "OGSE_signal/rotated/*EXP*.rot_tensor.Dproj.long.parquet" --roi ALL --out_root plots
 py scripts/make_contrast.py "OGSE_signal/rotated/EXP_N8.rot_tensor.long.parquet" "OGSE_signal/rotated/EXP_N4.rot_tensor.long.parquet" --axes long tra
-py scripts/plot_contrast_vs_g.py "D:\GitHub\NOGSE-microtortuosity\OGSE_signal\contrast\20230619_BRAIN3_N8-N4_d55/20230619_BRAIN3_N8-N4_d55.long.parquet" --xcol gthorsten_1 --y contrast_norm --out_root plots --axes long tra   
+py scripts/plot_OGSE-contrast_vs_g.py "D:\GitHub\NOGSE-microtortuosity\OGSE_signal\contrast\20230619_BRAIN3_N8-N4_d55/20230619_BRAIN3_N8-N4_d55.long.parquet" --xcol gthorsten_1 --y contrast_norm --out_root plots --axes long tra   

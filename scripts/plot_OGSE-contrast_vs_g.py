@@ -27,6 +27,14 @@ def main():
     p = Path(args.contrast_parquet)
     df = pd.read_parquet(p)
 
+    # compat: contrast nuevo usa "direction"; viejo usaba "axis"
+    if "direction" in df.columns:
+        dir_col = "direction"
+    elif "axis" in df.columns:
+        dir_col = "axis"
+    else:
+        raise KeyError(f"No encuentro 'direction' ni 'axis' en el parquet. Cols={sorted(df.columns)}")
+
     exp_id = args.exp or p.stem.split(".contrast_")[0]
     outdir = Path(args.out_root) /  "contrast" / exp_id
     outdir.mkdir(parents=True, exist_ok=True)
@@ -46,14 +54,14 @@ def main():
     # FIG A: por axis -> todas las ROIs
     # =========================
     for ax_name in args.axes:
-        d = df[df["axis"] == ax_name].copy()
+        d = df[df[dir_col] == ax_name].copy()
         if d.empty:
             continue
 
         plt.figure(figsize=(8, 6))
-        plt.title(f"axis={ax_name} | d  =  |  N{N1}-N{N2}", fontsize=14)
+        plt.title(f"{dir_col}={ax_name} | N{N1}-N{N2}", fontsize=14)
         plt.xlabel(f'Gradient strength ({args.xcol}) [mT/m]')
-        plt.ylabel(f'OGSE contrast $\Delta M_{{N{N1}-N{N2}}}$')
+        plt.ylabel(rf'OGSE contrast $\Delta M_{{N{N1}-N{N2}}}$')
         plt.grid(True, linestyle="--", alpha=0.3)
 
         for i, roi in enumerate(rois):
@@ -61,8 +69,8 @@ def main():
             if dr.empty:
                 continue
             if args.xcol == "gthorsten_1":
-                dr[args.xcol] = np.sqrt(2*dr[args.xcol]**2)
-            
+                dr[args.xcol] = np.sqrt(2 * dr[args.xcol]**2)
+
             plt.plot(dr[args.xcol], dr[args.y], marker="o", label=roi, color=PALETTE[i % len(PALETTE)])
 
         plt.legend(fontsize=9, title="ROI")
@@ -70,32 +78,34 @@ def main():
         plt.yticks(fontsize=14)
         plt.tick_params(direction='in', top=True, right=True, left=True, bottom=True)
         plt.tight_layout()
-        outpath = outdir / f"{exp_id}.{args.y}_vs_{args.xcol}.axis-{ax_name}.allROIs.png"
+        outpath = outdir / f"{exp_id}.{args.y}_vs_{args.xcol}.{dir_col}-{ax_name}.allROIs.png"
         plt.savefig(outpath, dpi=300)
         plt.close()
         print("Saved:", outpath)
+
+
 
     # =========================
     # FIG B: por ROI -> todas las axes (long/tra)
     # =========================
     for roi in rois:
-        d = df[(df["roi"] == roi) & (df["axis"].isin(args.axes))].copy()
+        d = df[(df["roi"] == roi) & (df[dir_col].isin(args.axes))].copy()
         if d.empty:
             continue
 
         plt.figure(figsize=(8, 6))
         plt.title(f"ROI={roi} | N{N1}-N{N2}", fontsize=14)
         plt.xlabel(f'Gradient strength ({args.xcol}) [mT/m]')
-        plt.ylabel(f'OGSE contrast $\Delta M_{{N{N1}-N{N2}}}$')
+        plt.ylabel(rf'OGSE contrast $\Delta M_{{N{N1}-N{N2}}}$')
         plt.grid(True, linestyle="--", alpha=0.3)
 
         for ax_i, ax_name in enumerate(args.axes):
-            da = d[d["axis"] == ax_name].sort_values(args.xcol)
+            da = d[d[dir_col] == ax_name].sort_values(args.xcol)
             if args.xcol == "gthorsten_1":
-                da[args.xcol] = np.sqrt(2*da[args.xcol]**2)
+                da[args.xcol] = np.sqrt(2 * da[args.xcol]**2)
             plt.plot(da[args.xcol], da[args.y], marker="o", label=ax_name)
 
-        plt.legend(fontsize=10, title="axis")
+        plt.legend(fontsize=10, title=dir_col)
         plt.xticks(fontsize=14)
         plt.yticks(fontsize=14)
         plt.tick_params(direction='in', top=True, right=True, left=True, bottom=True)
@@ -104,7 +114,6 @@ def main():
         plt.savefig(outpath, dpi=300)
         plt.close()
         print("Saved:", outpath)
-
 
 if __name__ == "__main__":
     main()

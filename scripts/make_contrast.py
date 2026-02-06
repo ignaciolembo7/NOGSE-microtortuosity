@@ -85,7 +85,13 @@ def main():
     N1 = int(pd.Series(df_ref.get("param_N", [])).dropna().unique()[0]) if "param_N" in df_ref.columns else -1
     N2 = int(pd.Series(df_cmp.get("param_N", [])).dropna().unique()[0]) if "param_N" in df_cmp.columns else -1
 
-    res = make_contrast(df_ref, df_cmp, axes=tuple(args.axes))
+    res = make_contrast(
+        df_ref, df_cmp,
+        axes=tuple(args.axes),
+        y_col="value",
+        key_cols=("stat", "roi", "direction", "b_step"),
+    )
+    
     sheet, analysis_id = build_analysis_id(
         df_ref, df_cmp,
         ref_p.name, cmp_p.name,

@@ -6,7 +6,6 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 from nogse_table_tools.b_from_g import b_from_g
-from nogse_table_tools.order import sort_curves
 
 def design_matrix(n_dirs: np.ndarray) -> np.ndarray:
     """A @ d = y, con d = [Dxx, Dyy, Dzz, Dxy, Dxz, Dyz]."""
@@ -108,6 +107,9 @@ def rotate_signals_tensor(
     if dfa.empty:
         raise ValueError(f"No hay filas con stat='{stat_avg}'.")
     param_cols = [c for c in dfa.columns if c.startswith("param_")]
+    meta_cols = [c for c in dfa.columns if c.startswith("meta_")]
+    if "source_file" in dfa.columns:
+        meta_cols.append("source_file")
 
     ndirs = int(pd.Series(dfa["direction"]).dropna().nunique())
 
@@ -152,52 +154,35 @@ def rotate_signals_tensor(
             S0 = float(d_b0["value"].mean())
         else:
             raise ValueError("s0_mode debe ser 'dir1' o 'mean'.")
+        
+        # --- g_lin_max correcto: usar g en el punto de bvalue_orig máximo (dir1) y escalar por b_step
+        d_dir1_nz = d_roi[(d_roi["direction"] == 1) & (d_roi["b_step"] > 0)].copy()
+        if d_dir1_nz.empty:
+            raise ValueError(f"ROI={roi}: no hay datos dir1 con b_step>0 para calcular g_lin_max.")
+
+        max_step = int(pd.to_numeric(d_dir1_nz["b_step"], errors="coerce").max())
+
+        b_for_max = pd.to_numeric(d_dir1_nz[b_col], errors="coerce")
+        idx_maxb = b_for_max.idxmax()
+
+        g_base_col = "g" if "g" in d_dir1_nz.columns else ("g_max" if "g_max" in d_dir1_nz.columns else None)
+        if g_base_col is None:
+            raise ValueError(f"ROI={roi}: no encontré columna 'g' ni 'g_max' para construir g_lin_max.")
+
+        g_max_for_lin = float(pd.to_numeric(d_dir1_nz.loc[idx_maxb, g_base_col], errors="coerce"))
+        if not np.isfinite(g_max_for_lin):
+            raise ValueError(f"ROI={roi}: g_max_for_lin es NaN/inf.")
+
+        roi_meta = {}
+        for c in meta_cols:
+            if c in d_roi.columns:
+                v = d_roi[c].dropna()
+                if not v.empty:
+                    roi_meta[c] = v.iloc[0]
 
         # Para cada b_step > 0, fit tensor con señales por dirección
         for b_step, d_bs in d_roi[d_roi["b_step"] > 0].groupby("b_step", sort=False):
-
-            # --- Agregar punto b0 "rotado": g=0, signal=S0, signal_norm=1
-            # (Esto permite que contraste tenga el primer punto en 0.)
-            extras0 = {}
-
-            # 1) arrastrar param_* (constantes por ROI)
-            for c in param_cols:
-                vals = d_roi[c].dropna()
-                if vals.empty:
-                    continue
-                uniq = vals.astype(str).unique()
-                extras0[c] = vals.iloc[0] if len(uniq) == 1 else (float(pd.to_numeric(vals, errors="coerce").median())
-                                                                if pd.to_numeric(vals, errors="coerce").notna().any()
-                                                                else vals.iloc[0])
-
-            # 2) columnas de gradiente: en b0 deben ser 0
-            for c in ["g", "g_max", "g_lin_max", "gthorsten"]:
-                if c in d_roi.columns:
-                    extras0[c] = 0.0
-
-            # 3) bvalue en b0
-            b0_report = 0.0
-
-            # Ejes que querés que existan en b0 (para que todas las curvas arranquen en 0)
-            axes_b0 = ["x", "y", "z", "eig1", "eig2", "eig3", "long", "tra"]
-
-            for axis_name in axes_b0:
-                row0 = {
-                    "roi": roi,
-                    "axis": axis_name,
-                    "b_step": 0,
-                    "bvalue": b0_report,
-                    "signal": float(S0),
-                    "signal_norm": 1.0,
-                    "S0": float(S0),
-                }
-                row0.update(extras0)
-                # si estás arrastrando bvalue_orig en el resto, también dejalo en 0
-                if "bvalue_orig" in d_roi.columns:
-                    row0["bvalue_orig"] = 0.0
-                out_rows.append(row0)
-
-            
+  
             # señales por dirección, ordenadas 1..ndirs
             d_bs = d_bs.sort_values("direction", kind="stable")
             if len(d_bs) != ndirs:
@@ -217,20 +202,59 @@ def rotate_signals_tensor(
             elif g_type == "g_lin_max" and "g_lin_max" in d_bs.columns:
                 g_col = "g_lin_max"
 
-            # b original (para guardar, comparar)
+          
+            # --- bvalue original (del archivo)
             b_orig_series = pd.to_numeric(d_bs.loc[d_bs["direction"] == 1, b_col], errors="coerce")
-            b_report_orig = float(b_orig_series.iloc[0]) if (not b_orig_series.empty and pd.notna(b_orig_series.iloc[0])) else None
+            bvalue_orig = float(b_orig_series.iloc[0]) if (not b_orig_series.empty and pd.notna(b_orig_series.iloc[0])) else np.nan
 
-            # b para el fit: calculado como en el notebook desde g_type
-            if g_col is None:
-                raise ValueError(f"No encontré columna de gradiente para g_type='{g_type}'. Busqué: g, g_max, gthorsten, gthorsten_mTm.")
+            # --- g (dir1) para este b_step
+            g_dir1 = np.nan
+            if "g" in d_bs.columns:
+                g_dir1_series = pd.to_numeric(d_bs.loc[d_bs["direction"] == 1, "g"], errors="coerce")
+                g_dir1 = float(g_dir1_series.iloc[0]) if (not g_dir1_series.empty and pd.notna(g_dir1_series.iloc[0])) else np.nan
 
-            g_dir1 = pd.to_numeric(d_bs.loc[d_bs["direction"] == 1, g_col], errors="coerce").iloc[0]
-            if not np.isfinite(g_dir1):
-                raise ValueError(f"ROI={roi}, b_step={b_step}: g_dir1 es NaN/inf en col {g_col}.")
+            # --- gthorsten (dir1) para este b_step (acepta gthorsten o gthorsten_mTm)
+            th_col = "gthorsten" if "gthorsten" in d_bs.columns else ("gthorsten_mTm" if "gthorsten_mTm" in d_bs.columns else None)
+            g_th_dir1 = np.nan
+            if th_col is not None:
+                g_th_series = pd.to_numeric(d_bs.loc[d_bs["direction"] == 1, th_col], errors="coerce")
+                g_th_dir1 = float(g_th_series.iloc[0]) if (not g_th_series.empty and pd.notna(g_th_series.iloc[0])) else np.nan
 
-            b = float(b_from_g(np.array([g_dir1]), N=float(Nval), gamma=float(gamma), delta_ms=float(delta_ms), delta_app_ms=float(delta_app_ms), g_type=g_type)[0])
-            b_report = b  # este es el bvalue 'thorsten' (o el que elijas con g_type)
+            # --- g_lin_max construido: g_max_for_lin * (b_step / max_step)
+            frac = float(b_step) / float(max_step)
+            g_lin = g_max_for_lin * frac
+
+            # --- bvalues calculados para cada tipo de g
+            bvalue_g = (
+                float(b_from_g(np.array([g_dir1]), N=float(Nval), gamma=float(gamma),
+                            delta_ms=float(delta_ms), delta_app_ms=float(delta_app_ms), g_type="g")[0])
+                if np.isfinite(g_dir1) else np.nan
+            )
+
+            bvalue_g_lin_max = float(
+                b_from_g(np.array([g_lin]), N=float(Nval), gamma=float(gamma),
+                        delta_ms=float(delta_ms), delta_app_ms=float(delta_app_ms), g_type="g_lin_max")[0]
+            )
+
+            bvalue_gthorsten = (
+                float(b_from_g(np.array([g_th_dir1]), N=float(Nval), gamma=float(gamma),
+                            delta_ms=float(delta_ms), delta_app_ms=float(delta_app_ms), g_type="gthorsten")[0])
+                if np.isfinite(g_th_dir1) else np.nan
+            )
+
+            # --- b usado para el fit / predicción (compatibilidad con tu parámetro g_type)
+            if g_type == "g":
+                if not np.isfinite(bvalue_g):
+                    raise ValueError(f"ROI={roi}, b_step={b_step}: g_type='g' pero falta g (dir1).")
+                b = bvalue_g
+            elif g_type == "gthorsten":
+                if not np.isfinite(bvalue_gthorsten):
+                    raise ValueError(f"ROI={roi}, b_step={b_step}: g_type='gthorsten' pero falta gthorsten (dir1).")
+                b = bvalue_gthorsten
+            else:  # "g_lin_max"
+                b = bvalue_g_lin_max
+
+            b_report = b
 
             s = d_bs["value"].to_numpy(dtype=float)
             s_norm = s / S0
@@ -262,7 +286,7 @@ def rotate_signals_tensor(
             S_z = None
 
             # --- extras por b_step (se copian a todas las filas de salida)
-            extras = {}
+            extras = dict(roi_meta)
 
             # 1) arrastrar todos los param_*
             for c in param_cols:
@@ -276,14 +300,14 @@ def rotate_signals_tensor(
                     nums = pd.to_numeric(vals, errors="coerce")
                     extras[c] = float(nums.median()) if nums.notna().any() else vals.iloc[0]
 
-            # 2) arrastrar g / g_max / gthorsten (si existen)
-            for c in ["g", "g_lin_max", "gthorsten", "gthorsten_mTm"]:
-                if c not in d_bs.columns:
-                    continue
-                vals = pd.to_numeric(d_bs[c], errors="coerce")
-                if vals.notna().any():
-                    key = "gthorsten" if c == "gthorsten_mTm" else c
-                    extras[key] = float(vals.median())
+            # 2) g explícitos por b_step (NO medianas)
+            if np.isfinite(g_dir1):
+                extras["g"] = g_dir1
+            extras["g_max"] = g_max_for_lin
+            extras["g_lin_max"] = g_lin
+            if np.isfinite(g_th_dir1):
+                extras["gthorsten"] = g_th_dir1
+
 
 
             for axis_name, axis_vec in axes_full.items():
@@ -305,8 +329,10 @@ def rotate_signals_tensor(
                     "S0": S0,
                 }
                 row_dict.update(extras)
-                if b_report_orig is not None:
-                    row_dict["bvalue_orig"] = b_report_orig
+                row_dict["bvalue_g"] = bvalue_g
+                row_dict["bvalue_g_lin_max"] = bvalue_g_lin_max
+                row_dict["bvalue_gthorsten"] = bvalue_gthorsten
+                row_dict["bvalue_orig"] = bvalue_orig
                 out_rows.append(row_dict)
 
                 dproj_dict = {
@@ -317,9 +343,10 @@ def rotate_signals_tensor(
                     "D_proj": Dp,
                 }
                 dproj_dict.update(extras)
-                if b_report_orig is not None:
-                    dproj_dict["bvalue_orig"] = b_report_orig
-                
+                dproj_dict["bvalue_g"] = bvalue_g
+                dproj_dict["bvalue_g_lin_max"] = bvalue_g_lin_max
+                dproj_dict["bvalue_gthorsten"] = bvalue_gthorsten
+                dproj_dict["bvalue_orig"] = bvalue_orig
                 if axis_name in {"x", "y", "z", "eig1", "eig2", "eig3"}:
                     dproj_rows.append(dproj_dict)
 
@@ -334,8 +361,6 @@ def rotate_signals_tensor(
                     "D_proj": Dp_dir,
                 }
                 dproj_dict.update(extras)
-                if b_report_orig is not None:
-                    dproj_dict["bvalue_orig"] = b_report_orig
                 dproj_rows.append(dproj_dict)
 
             # --- tra = promedio de señales y y z (NO vector, NO D_proj)
@@ -351,17 +376,21 @@ def rotate_signals_tensor(
                     "S0": S0,
                 }
                 row_dict.update(extras)
-                if b_report_orig is not None:
-                    row_dict["bvalue_orig"] = b_report_orig
+
                 out_rows.append(row_dict)
 
     df_rot = pd.DataFrame(out_rows).sort_values(["roi", "param_N", "axis", "b_step"], kind="stable")
-    # --- agregar b_step=0 UNA vez por (roi, axis) usando S0 (sin merges que duplican)
+    keep_cols = (
+    ["roi", "axis", "S0"]
+    + [c for c in df_rot.columns if c.startswith("param_")]
+    + [c for c in df_rot.columns if c.startswith("meta_")]
+    + (["source_file"] if "source_file" in df_rot.columns else [])
+    + [c for c in ["g","g_max","g_lin_max","gthorsten","bvalue_orig"] if c in df_rot.columns]
+    )
+
     b0 = (
         df_rot.groupby(["roi", "axis"], as_index=False)
-            .first()
-            [["roi", "axis", "S0"] + [c for c in df_rot.columns if c.startswith("param_")] +
-            [c for c in ["g","g_max","g_lin_max","gthorsten","bvalue_orig"] if c in df_rot.columns]]
+            .first()[keep_cols]
     )
 
     b0["b_step"] = 0
@@ -373,9 +402,32 @@ def rotate_signals_tensor(
             b0[c] = 0.0
     if "bvalue_orig" in b0.columns:
         b0["bvalue_orig"] = 0.0
+    for c in ["bvalue_g", "bvalue_g_lin_max", "bvalue_gthorsten", "bvalue_orig"]:
+        if c in b0.columns:
+            b0[c] = 0.0
+
 
     df_rot = pd.concat([b0, df_rot], ignore_index=True)
-    df_rot = sort_curves(df_rot, curve_cols=("roi", "axis"), step_col="b_step")
+
+    # --- misma estructura que el long original
+    df_rot = df_rot.rename(columns={"axis": "direction", "signal": "value"})
+    df_rot["stat"] = stat_avg  # típicamente "avg"
+
+    # --- ordenar direcciones como pediste
+    dir_order = ["eig1", "eig2", "eig3", "x", "y", "z", "tra", "long"]
+    df_rot["direction"] = pd.Categorical(df_rot["direction"], categories=dir_order, ordered=True)
+
+    # --- orden final: por roi+direction, y dentro de cada curva b_step (0 primero)
+    sort_cols = [c for c in ["stat", "roi", "direction", "b_step"] if c in df_rot.columns]
+    df_rot = df_rot.sort_values(sort_cols, kind="stable").reset_index(drop=True)
+
+    # (opcional) dejar direction como string “normal” en el output
+    df_rot["direction"] = df_rot["direction"].astype(str)
+
+    # --- (opcional) ordenar columnas “como siempre”
+    first_cols = ["stat", "roi", "direction", "b_step", "bvalue", "value"]
+    rest = [c for c in df_rot.columns if c not in first_cols]
+    df_rot = df_rot[first_cols + rest]
 
     df_dproj = pd.DataFrame(dproj_rows).sort_values(["roi", "axis", "b_step"], kind="stable")
     return RotResult(rotated_signal_long=df_rot, dproj_long=df_dproj)
