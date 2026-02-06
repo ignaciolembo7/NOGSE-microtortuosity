@@ -43,7 +43,7 @@ def plot_ogse_vs_G(
     out_dir = Path(out_dir)
     _ensure_dir(out_dir)
 
-        # ----------------------------
+    # ----------------------------
     # 1) Construir tabla avg + std
     # ----------------------------
     # En tu formato long:

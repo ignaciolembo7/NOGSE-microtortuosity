@@ -5,7 +5,14 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
-PALETTE = ['#377eb8', '#984ea3', '#e41a1c', '#ff7f00', '#a65628', '#999999']
+PALETTE = [
+    '#377eb8',  # azul
+    '#984ea3',  # púrpura
+    '#e41a1c',  # rojo
+    '#ff7f00',  # naranja
+    '#a65628',  # marrón
+    '#999999',  # gris
+]
 
 def main():
     ap = argparse.ArgumentParser()
@@ -21,7 +28,7 @@ def main():
     df = pd.read_parquet(p)
 
     exp_id = args.exp or p.stem.split(".contrast_")[0]
-    outdir = Path(args.out_root) / exp_id / "contrast"
+    outdir = Path(args.out_root) /  "contrast" / exp_id
     outdir.mkdir(parents=True, exist_ok=True)
 
     # ROIs y Ns disponibles (N se toma del ref: param_N_1)
@@ -43,19 +50,25 @@ def main():
         if d.empty:
             continue
 
-        plt.figure(figsize=(9, 7))
-        plt.title(f"{exp_id} | {args.y} vs {args.xcol} | axis={ax_name} | N{N1}-N{N2}", fontsize=14)
-        plt.xlabel(args.xcol)
-        plt.ylabel(args.y)
+        plt.figure(figsize=(8, 6))
+        plt.title(f"axis={ax_name} | d  =  |  N{N1}-N{N2}", fontsize=14)
+        plt.xlabel(f'Gradient strength ({args.xcol}) [mT/m]')
+        plt.ylabel(f'OGSE contrast $\Delta M_{{N{N1}-N{N2}}}$')
         plt.grid(True, linestyle="--", alpha=0.3)
 
         for i, roi in enumerate(rois):
             dr = d[d["roi"] == roi].sort_values(args.xcol)
             if dr.empty:
                 continue
+            if args.xcol == "gthorsten_1":
+                dr[args.xcol] = np.sqrt(2*dr[args.xcol]**2)
+            
             plt.plot(dr[args.xcol], dr[args.y], marker="o", label=roi, color=PALETTE[i % len(PALETTE)])
 
         plt.legend(fontsize=9, title="ROI")
+        plt.xticks(fontsize=14)
+        plt.yticks(fontsize=14)
+        plt.tick_params(direction='in', top=True, right=True, left=True, bottom=True)
         plt.tight_layout()
         outpath = outdir / f"{exp_id}.{args.y}_vs_{args.xcol}.axis-{ax_name}.allROIs.png"
         plt.savefig(outpath, dpi=300)
@@ -70,17 +83,22 @@ def main():
         if d.empty:
             continue
 
-        plt.figure(figsize=(9, 7))
-        plt.title(f"{exp_id} | {args.y} vs {args.xcol} | ROI={roi} | N{N1}-N{N2}", fontsize=14)
-        plt.xlabel(args.xcol)
-        plt.ylabel(args.y)
+        plt.figure(figsize=(8, 6))
+        plt.title(f"ROI={roi} | N{N1}-N{N2}", fontsize=14)
+        plt.xlabel(f'Gradient strength ({args.xcol}) [mT/m]')
+        plt.ylabel(f'OGSE contrast $\Delta M_{{N{N1}-N{N2}}}$')
         plt.grid(True, linestyle="--", alpha=0.3)
 
         for ax_i, ax_name in enumerate(args.axes):
             da = d[d["axis"] == ax_name].sort_values(args.xcol)
+            if args.xcol == "gthorsten_1":
+                da[args.xcol] = np.sqrt(2*da[args.xcol]**2)
             plt.plot(da[args.xcol], da[args.y], marker="o", label=ax_name)
 
         plt.legend(fontsize=10, title="axis")
+        plt.xticks(fontsize=14)
+        plt.yticks(fontsize=14)
+        plt.tick_params(direction='in', top=True, right=True, left=True, bottom=True)
         plt.tight_layout()
         outpath = outdir / f"{exp_id}.{args.y}_vs_{args.xcol}.ROI-{roi}.axes.png"
         plt.savefig(outpath, dpi=300)

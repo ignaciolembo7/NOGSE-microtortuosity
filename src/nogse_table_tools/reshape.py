@@ -3,16 +3,6 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-def _count_leading_zeros(b: pd.Series) -> int:
-    # cuenta ceros consecutivos al inicio (b0 repetido)
-    n = 0
-    for v in b.to_numpy():
-        if v == 0:
-            n += 1
-        else:
-            break
-    return n
-
 def to_long(
     stats: dict[str, pd.DataFrame],
     *,
@@ -80,4 +70,9 @@ def to_long(
 
     out = pd.concat(long_parts, ignore_index=True)
     out["source_file"] = source_file if source_file is not None else ""
+
+    # Orden final: por ROI y dirección; y dentro de cada curva, b_step (0 primero)
+    sort_cols = [c for c in ["stat", "roi", "direction", "b_step"] if c in out.columns]
+    out = out.sort_values(sort_cols, kind="stable").reset_index(drop=True)
+
     return out

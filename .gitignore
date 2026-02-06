@@ -50,7 +50,7 @@ htmlcov/
 # plots/
 
 # Archivos intermedios típicos
-*.parquet
+# *.parquet
 # *.csv
 
 # (opcional) si generás JSONs de metadata

@@ -1,6 +1,7 @@
 from __future__ import annotations
 from dataclasses import dataclass
 import pandas as pd
+from nogse_table_tools.order import sort_curves
 
 
 @dataclass
@@ -69,5 +70,11 @@ def make_contrast(
     else:
         # fallback: normalizar con S0
         m["contrast_norm"] = (m[f"{y_col}_1"] / m["S0_1"]) - (m[f"{y_col}_2"] / m["S0_2"])
+
+    # Orden: cada curva (axis, roi) con b_step creciendo (b_step=0 primero)
+    sort_cols = [c for c in ["axis", "roi", "b_step"] if c in m.columns]
+    if sort_cols:
+        m = m.sort_values(sort_cols, kind="stable").reset_index(drop=True)
+    m = sort_curves(m, curve_cols=("axis", "roi"), step_col="b_step")
 
     return ContrastResult(df=m)

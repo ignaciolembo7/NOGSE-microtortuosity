@@ -35,7 +35,9 @@ def main() -> None:
 
     res.rotated_signal_long.to_parquet(out_rot, index=False)
     res.dproj_long.to_parquet(out_dpr, index=False)
-
+    res.rotated_signal_long.to_excel(out_rot.with_suffix(".xlsx"), index=False)
+    res.dproj_long.to_excel(out_dpr.with_suffix(".xlsx"), index=False)
+    
     print("Saved rotated signals:", out_rot)
     print("Saved Dproj:", out_dpr)
 

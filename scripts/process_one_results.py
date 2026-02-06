@@ -54,11 +54,15 @@ def main():
         delta_app_ms=float(row["delta_app_ms"]),
         gthorsten_val=gth,
     )
+    # Orden final para exportación: por ROI y dirección; b0 dentro de cada curva
+    sort_cols = [c for c in ["roi", "direction", "source_file", "stat", "b_step"] if c in df_long.columns]
+    df_long = df_long.sort_values(sort_cols, kind="stable").reset_index(drop=True)
 
     args.out_dir.mkdir(parents=True, exist_ok=True)
     out_path = args.out_dir / (args.results_xls.stem + ".long.parquet")
     df_long.to_parquet(out_path, index=False)
-
+    df_long.to_excel(out_path.with_suffix(".xlsx"), index=False)
+    
     print("Selected params row:")
     print(row[["sheet","seq","Hz","bmax","d_ms","delta_ms","delta_app_ms","N","gthorsten_mTm"]].to_string())
     print("Saved:", out_path)

@@ -5,6 +5,8 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 from pathlib import Path
+from nogse_table_tools.b_from_g import b_from_g
+from nogse_table_tools.order import sort_curves
 
 def design_matrix(n_dirs: np.ndarray) -> np.ndarray:
     """A @ d = y, con d = [Dxx, Dyy, Dzz, Dxy, Dxz, Dyz]."""
@@ -52,19 +54,6 @@ def D_proj(D: np.ndarray, n: np.ndarray) -> float:
     n = np.asarray(n, dtype=float)
     n = n / (np.linalg.norm(n) + 1e-15)
     return float(n.T @ D @ n)
-
-def b_from_g(g: np.ndarray, *, N: float, gamma: float, delta_ms: float, delta_app_ms: float, g_type: str) -> np.ndarray:
-    """
-    Replica tu notebook:
-      if g_type == 'gthorsten': g = sqrt(2)*g
-      b = N * gamma^2 * delta^2 * delta_app * g^2 / 1e9
-    Asume: delta y delta_app en ms, g en mT/m (como en tus tablas).
-    """
-    g = np.asarray(g, dtype=float)
-    if g_type == "gthorsten":
-        g = np.sqrt(2.0) * g
-    return N * (gamma**2) * (delta_ms**2) * (delta_app_ms) * (g**2) / 1e9
-
 @dataclass(frozen=True)
 class RotResult:
     rotated_signal_long: pd.DataFrame
@@ -166,6 +155,48 @@ def rotate_signals_tensor(
 
         # Para cada b_step > 0, fit tensor con señales por dirección
         for b_step, d_bs in d_roi[d_roi["b_step"] > 0].groupby("b_step", sort=False):
+
+            # --- Agregar punto b0 "rotado": g=0, signal=S0, signal_norm=1
+            # (Esto permite que contraste tenga el primer punto en 0.)
+            extras0 = {}
+
+            # 1) arrastrar param_* (constantes por ROI)
+            for c in param_cols:
+                vals = d_roi[c].dropna()
+                if vals.empty:
+                    continue
+                uniq = vals.astype(str).unique()
+                extras0[c] = vals.iloc[0] if len(uniq) == 1 else (float(pd.to_numeric(vals, errors="coerce").median())
+                                                                if pd.to_numeric(vals, errors="coerce").notna().any()
+                                                                else vals.iloc[0])
+
+            # 2) columnas de gradiente: en b0 deben ser 0
+            for c in ["g", "g_max", "g_lin_max", "gthorsten"]:
+                if c in d_roi.columns:
+                    extras0[c] = 0.0
+
+            # 3) bvalue en b0
+            b0_report = 0.0
+
+            # Ejes que querés que existan en b0 (para que todas las curvas arranquen en 0)
+            axes_b0 = ["x", "y", "z", "eig1", "eig2", "eig3", "long", "tra"]
+
+            for axis_name in axes_b0:
+                row0 = {
+                    "roi": roi,
+                    "axis": axis_name,
+                    "b_step": 0,
+                    "bvalue": b0_report,
+                    "signal": float(S0),
+                    "signal_norm": 1.0,
+                    "S0": float(S0),
+                }
+                row0.update(extras0)
+                # si estás arrastrando bvalue_orig en el resto, también dejalo en 0
+                if "bvalue_orig" in d_roi.columns:
+                    row0["bvalue_orig"] = 0.0
+                out_rows.append(row0)
+
             
             # señales por dirección, ordenadas 1..ndirs
             d_bs = d_bs.sort_values("direction", kind="stable")
@@ -324,6 +355,27 @@ def rotate_signals_tensor(
                     row_dict["bvalue_orig"] = b_report_orig
                 out_rows.append(row_dict)
 
-    df_rot = pd.DataFrame(out_rows).sort_values(["roi", "axis", "b_step"], kind="stable")
+    df_rot = pd.DataFrame(out_rows).sort_values(["roi", "param_N", "axis", "b_step"], kind="stable")
+    # --- agregar b_step=0 UNA vez por (roi, axis) usando S0 (sin merges que duplican)
+    b0 = (
+        df_rot.groupby(["roi", "axis"], as_index=False)
+            .first()
+            [["roi", "axis", "S0"] + [c for c in df_rot.columns if c.startswith("param_")] +
+            [c for c in ["g","g_max","g_lin_max","gthorsten","bvalue_orig"] if c in df_rot.columns]]
+    )
+
+    b0["b_step"] = 0
+    b0["bvalue"] = 0.0
+    b0["signal"] = b0["S0"]
+    b0["signal_norm"] = 1.0
+    for c in ["g", "g_max", "g_lin_max", "gthorsten"]:
+        if c in b0.columns:
+            b0[c] = 0.0
+    if "bvalue_orig" in b0.columns:
+        b0["bvalue_orig"] = 0.0
+
+    df_rot = pd.concat([b0, df_rot], ignore_index=True)
+    df_rot = sort_curves(df_rot, curve_cols=("roi", "axis"), step_col="b_step")
+
     df_dproj = pd.DataFrame(dproj_rows).sort_values(["roi", "axis", "b_step"], kind="stable")
     return RotResult(rotated_signal_long=df_rot, dproj_long=df_dproj)

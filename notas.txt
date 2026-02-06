@@ -8,4 +8,4 @@ py scripts/rotate_ogse_tensor.py "OGSE_signal\data\NOMBRE_results.long.parquet" 
 py scripts/plot_rot_signal_vs_g.py --glob "OGSE_signal/rotated/*EXP*.rot_tensor.long.parquet" --roi PostCC --xcol g_lin_max --out_root plots
 py scripts/plot_dproj_vs_bvalue.py --glob "OGSE_signal/rotated/*EXP*.rot_tensor.Dproj.long.parquet" --roi ALL --out_root plots
 py scripts/make_contrast.py "OGSE_signal/rotated/EXP_N8.rot_tensor.long.parquet" "OGSE_signal/rotated/EXP_N4.rot_tensor.long.parquet" --axes long tra
-py scripts/plot_contrast_vs_g.py "OGSE_signal/contrast/<exp>/contrast_N8-N4/<exp>.contrast_N8-N4.long.parquet" --xcol g_lin_max_1 --y contrast_norm --out_root plots --axes long tra
+py scripts/plot_contrast_vs_g.py "D:\GitHub\NOGSE-microtortuosity\OGSE_signal\contrast\20230619_BRAIN3_N8-N4_d55/20230619_BRAIN3_N8-N4_d55.long.parquet" --xcol gthorsten_1 --y contrast_norm --out_root plots --axes long tra   
